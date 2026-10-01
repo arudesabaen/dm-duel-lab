@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>DM Duel Lab v2</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0d1117;color:#f0f3f6;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:#161b22;border-bottom:1px solid #30363d;padding:10px}
+header b{font-size:20px}
+.tabs{display:flex;gap:6px;overflow:auto;margin-top:8px}
+button,.fileBtn{border:1px solid #444c56;background:#21262d;color:#fff;border-radius:8px;padding:9px 12px;font-size:14px;cursor:pointer}
+button:active,.fileBtn:active{transform:scale(.98)}
+button.primary,.fileBtn.primary{background:#238636;border-color:#2ea043}
+main{max-width:1100px;margin:auto;padding:12px}
+.panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:12px;margin-bottom:12px}
+.hidden{display:none!important}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1;min-width:180px}
+input,select,textarea{background:#0d1117;color:#fff;border:1px solid #444c56;border-radius:7px;padding:9px;font-size:15px}
+textarea{width:100%;min-height:90px;margin-top:8px}
+.notice{background:#1f2937;border-radius:8px;padding:10px;color:#dbe4ee}
+.library{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
+.lib{background:#0d1117;border:1px solid #30363d;border-radius:9px;padding:10px}
+.cards{display:flex;flex-wrap:wrap;gap:7px}
+.card{background:#21262d;border:1px solid #444c56;border-radius:8px;padding:8px;min-width:105px;cursor:pointer}
+.small{font-size:12px;color:#aab4c0}
+.ok{color:#56d364}.warn{color:#e3b341}.err{color:#f85149}
+.preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+.photo{background:#0d1117;border:1px solid #30363d;border-radius:9px;padding:8px}
+.photo img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px}
+.status{font-size:13px;margin-top:7px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.stat{background:#0d1117;border:1px solid #30363d;border-radius:7px;padding:8px;text-align:center}
+.zone{margin-top:8px;padding:8px;background:#0d1117;border-radius:8px}
+.turn{font-size:18px;font-weight:bold;margin-bottom:10px}
+.log{max-height:250px;overflow:auto}
+@media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <b>DM Duel Lab v2</b>
+  <div class="tabs">
+    <button data-tab="deck">デッキ構築</button>
+    <button data-tab="photo">写真から登録</button>
+    <button data-tab="game">対戦</button>
+    <button data-tab="help">使い方</button>
+  </div>
+</header>
+
+<main>
+<section id="deck">
+  <div class="panel">
+    <h2>デッキ構築</h2>
+    <div class="notice">カード名・テキストを入力して検索 → 「＋デッキ」で追加できます。</div>
+    <div class="row" style="margin-top:9px">
+      <input id="search" class="grow" placeholder="カード名・テキストを検索">
+      <button id="clearSearch">検索クリア</button>
+      <button id="clearDeck">デッキを空にする</button>
+      <button id="setP1">P1に保存</button>
+      <button id="setP2">P2に保存</button>
+    </div>
+    <p>現在のデッキ：<b id="count">0</b>/40</p>
+    <div id="library" class="library"></div>
+  </div>
+
+  <div class="panel">
+    <h3>現在のデッキ</h3>
+    <div id="decklist" class="cards"></div>
+  </div>
+
+  <div class="panel">
+    <h3>カードを手動登録</h3>
+    <div class="row">
+      <input id="cn" class="grow" placeholder="カード名">
+      <input id="cc" type="number" min="0" placeholder="コスト" style="width:90px">
+      <input id="cp" type="number" min="0" placeholder="パワー" style="width:100px">
+      <select id="ct">
+        <option>クリーチャー</option>
+        <option>呪文</option>
+        <option>タマシード</option>
+      </select>
+    </div>
+    <textarea id="cx" placeholder="カードテキスト"></textarea>
+    <button id="registerCard" class="primary" style="margin-top:8px">このカードを登録</button>
+    <div id="registerMsg" class="status"></div>
+  </div>
+</section>
+
+<section id="photo" class="hidden">
+  <div class="panel">
+    <h2>📷 写真からカード登録</h2>
+    <div class="notice">
+      まず写真を選択します。<b>写真の表示はOCRとは別処理</b>なので、OCRが失敗しても写真から手動登録できます。
+    </div>
+    <input id="photos" type="file" accept="image/*" multiple hidden>
+    <div class="row" style="margin-top:10px">
+      <button id="choosePhotos" class="primary">📷 写真を選ぶ</button>
+      <button id="runOcr">選択した写真をOCR</button>
+      <button id="clearPhotos">写真をクリア</button>
+    </div>
+    <div id="ocrStatus" class="status">写真を選択してください。</div>
+    <div id="photoList" class="preview"></div>
+  </div>
+  <div class="panel">
+    <h3>登録候補</h3>
+    <div class="notice">OCR結果は誤認識することがあります。カード名・コスト・パワー・種類・テキストを確認してから登録してください。</div>
+    <div id="ocrResults"></div>
+  </div>
+</section>
+
+<section id="game" class="hidden">
+  <div id="turn" class="turn"></div>
+  <div class="row">
+    <button id="newGame" class="primary">新しい対戦</button>
+    <button id="draw">ドロー</button>
+    <button id="charge">マナチャージ</button>
+    <button id="endTurn">ターン終了</button>
+    <button id="giveup">投了</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="loadP1">P1保存デッキを読み込み</button>
+    <button id="loadP2">P2保存デッキを読み込み</button>
+  </div>
+  <div id="gameArea" class="row" style="align-items:stretch;margin-top:10px">
+    <div id="p0" class="panel" style="flex:1"></div>
+    <div id="p1" class="panel" style="flex:1"></div>
+  </div>
+  <div class="panel"><h3>対戦ログ</h3><div id="log" class="log"></div></div>
+</section>
+
+<section id="help" class="hidden">
+  <div class="panel">
+    <h2>現在できること</h2>
+    <ul>
+      <li>カード検索</li>
+      <li>手動カード登録</li>
+      <li>登録したカードをデッキへ追加</li>
+      <li>40枚デッキをP1/P2へ保存</li>
+      <li>写真選択・プレビュー</li>
+      <li>写真OCR → 認識結果を修正してカード登録</li>
+      <li>簡易対戦テスト</li>
+    </ul>
+    <p class="small">対戦ルールはまだ開発途中です。最終版では、公式ルールに合わせて効果処理を段階的に追加します。</p>
+  </div>
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+"use strict";
+
+const builtin = [
+  ["テスト・クリーチャー",3,3000,"クリーチャー","通常のクリーチャー"],
+  ["青銅の鎧",3,1000,"クリーチャー","マナを増やす練習用"],
+  ["ドギラゴン逆（テスト）",7,15000,"クリーチャー","ドギラゴン逆の検証用"],
+  ["除去呪文（テスト）",4,0,"呪文","相手クリーチャーを墓地へ"],
+  ["パワー低下呪文（テスト）",4,0,"呪文","相手のパワーを0にする"],
+  ["バトル呪文（テスト）",5,0,"呪文","クリーチャー同士をバトル"],
+  ["V頂神話 カツムゲン（テスト）",10,99999,"クリーチャー","バトル検証用"]
+].map((x,i)=>({id:"builtin_"+i,name:x[0],cost:x[1],power:x[2],type:x[3],text:x[4]}));
+
+let custom = loadJSON("dm_custom",[]);
+let deck = [];
+let selectedFiles = [];
+let game = null;
+
+function loadJSON(key, fallback){
+  try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback))}
+  catch(e){return fallback}
+}
+function saveJSON(key,value){localStorage.setItem(key,JSON.stringify(value))}
+function allCards(){return builtin.concat(custom)}
+
+function esc(s){
+  return String(s ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))
+}
+function showTab(name){
+  ["deck","photo","game","help"].forEach(id=>document.getElementById(id).classList.toggle("hidden",id!==name));
+}
+document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
+
+function renderLibrary(){
+  const q=document.getElementById("search").value.trim().toLowerCase();
+  const list=document.getElementById("library");
+  const cards=allCards().filter(c=>(c.name+" "+c.text+" "+c.type).toLowerCase().includes(q));
+  if(!cards.length){
+    list.innerHTML='<div class="notice">検索結果がありません。</div>';
+    return;
+  }
+  list.innerHTML=cards.map(c=>`
+    <div class="lib">
+      <b>${esc(c.name)}</b>
+      <div class="small">${esc(c.type)} / コスト ${c.cost}${c.power ? " / パワー "+c.power : ""}</div>
+      <div class="small" style="margin:5px 0">${esc(c.text)}</div>
+      <button class="addCard" data-id="${esc(c.id)}">＋デッキ</button>
+    </div>`).join("");
+}
+document.getElementById("search").addEventListener("input",renderLibrary);
+document.getElementById("clearSearch").addEventListener("click",()=>{
+  document.getElementById("search").value=""; renderLibrary();
+});
+
+document.getElementById("library").addEventListener("click",e=>{
+  const b=e.target.closest(".addCard");
+  if(!b)return;
+  addToDeck(b.dataset.id);
+});
+
+function addToDeck(id){
+  const c=allCards().find(x=>String(x.id)===String(id));
+  if(!c){alert("カードが見つかりません");return}
+  if(deck.length>=40){alert("デッキは40枚です");return}
+  const same=deck.filter(x=>x.name===c.name).length;
+  if(same>=4){alert("同名カードはこの試作版では4枚までです");return}
+  deck.push({...c});
+  renderDeck();
+}
+function renderDeck(){
+  document.getElementById("count").textContent=deck.length;
+  const box=document.getElementById("decklist");
+  if(!deck.length){box.innerHTML='<span class="small">まだカードがありません。</span>';return}
+  box.innerHTML=deck.map((c,i)=>`
+    <button class="card removeCard" data-index="${i}">
+      ${esc(c.name)}<br><span class="small">コスト ${c.cost}</span>
+    </button>`).join("");
+}
+document.getElementById("decklist").addEventListener("click",e=>{
+  const b=e.target.closest(".removeCard");
+  if(!b)return;
+  deck.splice(Number(b.dataset.index),1);renderDeck();
+});
+document.getElementById("clearDeck").addEventListener("click",()=>{
+  if(confirm("現在のデッキを空にしますか？")){deck=[];renderDeck()}
+});
+
+function saveDeck(slot){
+  if(deck.length!==40){alert("40枚にしてから保存してください。現在 "+deck.length+"枚です。");return}
+  saveJSON("dm_p"+slot,deck);
+  alert("P"+(slot+1)+"に保存しました。");
+}
+document.getElementById("setP1").addEventListener("click",()=>saveDeck(0));
+document.getElementById("setP2").addEventListener("click",()=>saveDeck(1));
+
+document.getElementById("registerCard").addEventListener("click",()=>{
+  const n=document.getElementById("cn").value.trim();
+  if(!n){document.getElementById("registerMsg").innerHTML='<span class="err">カード名を入力してください。</span>';return}
+  const c={
+    id:"custom_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),
+    name:n,
+    cost:Number(document.getElementById("cc").value)||0,
+    power:Number(document.getElementById("cp").value)||0,
+    type:document.getElementById("ct").value,
+    text:document.getElementById("cx").value.trim()
+  };
+  custom.push(c);saveJSON("dm_custom",custom);renderLibrary();
+  document.getElementById("registerMsg").innerHTML='<span class="ok">登録しました。下のカード一覧から検索・デッキ追加できます。</span>';
+  document.getElementById("cn").value="";
+  document.getElementById("cc").value="";
+  document.getElementById("cp").value="";
+  document.getElementById("cx").value="";
+});
+
+function makePreview(file,index){
+  const url=URL.createObjectURL(file);
+  const wrap=document.createElement("div");
+  wrap.className="photo";
+  wrap.innerHTML=`<img alt="カード写真"><div class="status">写真を読み込みました</div>`;
+  wrap.querySelector("img").src=url;
+  wrap.dataset.index=index;
+  return wrap;
+}
+
+document.getElementById("choosePhotos").addEventListener("click",()=>{
+  document.getElementById("photos").click();
+});
+document.getElementById("photos").addEventListener("change",e=>{
+  selectedFiles=[...e.target.files];
+  const list=document.getElementById("photoList");
+  list.innerHTML="";
+  if(!selectedFiles.length){
+    document.getElementById("ocrStatus").textContent="写真が選択されていません。";
+    return;
+  }
+  selectedFiles.forEach((f,i)=>list.appendChild(makePreview(f,i)));
+  document.getElementById("ocrStatus").innerHTML=`<span class="ok">${selectedFiles.length}枚の写真を選択しました。</span> 「選択した写真をOCR」を押してください。`;
+  document.getElementById("ocrResults").innerHTML="";
+});
+document.getElementById("clearPhotos").addEventListener("click",()=>{
+  selectedFiles=[];document.getElementById("photos").value="";
+  document.getElementById("photoList").innerHTML="";
+  document.getElementById("ocrResults").innerHTML="";
+  document.getElementById("ocrStatus").textContent="写真を選択してください。";
+});
+
+function guessCard(text){
+  const lines=text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  let cost=0,power=0;
+  const nums=[...text.matchAll(/\b\d{1,2}\b/g)].map(m=>Number(m[0])).filter(n=>n<=20);
+  if(nums.length)cost=nums[0];
+  const pm=text.match(/\b\d{3,6}\b/);
+  if(pm)power=Number(pm[0]);
+  return {name:lines[0]||"未認識カード",cost,power};
+}
+function renderOCRCandidate(data,index){
+  const id="ocr_"+Date.now()+"_"+index;
+  const div=document.createElement("div");
+  div.className="panel";
+  div.innerHTML=`
+    <b>写真 ${index+1} の登録候補</b>
+    <div class="row" style="margin-top:8px">
+      <input id="${id}_name" class="grow" value="${esc(data.name)}" placeholder="カード名">
+      <input id="${id}_cost" type="number" min="0" value="${data.cost}" placeholder="コスト" style="width:90px">
+      <input id="${id}_power" type="number" min="0" value="${data.power}" placeholder="パワー" style="width:110px">
+      <select id="${id}_type"><option>クリーチャー</option><option>呪文</option><option>タマシード</option></select>
+    </div>
+    <textarea id="${id}_text">${esc(data.text)}</textarea>
+    <button class="primary registerOCR" data-id="${id}" style="margin-top:8px">このカードを登録</button>
+    <div id="${id}_msg" class="status"></div>`;
+  div.dataset.id=id;
+  div._ocrData=data;
+  document.getElementById("ocrResults").appendChild(div);
+}
+
+document.getElementById("ocrResults").addEventListener("click",e=>{
+  const b=e.target.closest(".registerOCR");if(!b)return;
+  const id=b.dataset.id;
+  const root=b.closest(".panel");
+  const name=root.querySelector("#"+id+"_name").value.trim();
+  if(!name){root.querySelector(".status").innerHTML='<span class="err">カード名を入力してください。</span>';return}
+  const c={
+    id:"custom_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),
+    name,
+    cost:Number(root.querySelector("#"+id+"_cost").value)||0,
+    power:Number(root.querySelector("#"+id+"_power").value)||0,
+    type:root.querySelector("#"+id+"_type").value,
+    text:root.querySelector("#"+id+"_text").value.trim()
+  };
+  custom.push(c);saveJSON("dm_custom",custom);renderLibrary();
+  root.querySelector(".status").innerHTML='<span class="ok">登録しました。デッキ構築画面で検索できます。</span>';
+  b.disabled=true;b.textContent="登録済み";
+});
+
+document.getElementById("runOcr").addEventListener("click",async()=>{
+  if(!selectedFiles.length){alert("先に「📷 写真を選ぶ」から写真を選択してください。");return}
+  const status=document.getElementById("ocrStatus");
+  const results=document.getElementById("ocrResults");
+  results.innerHTML="";
+  if(!window.Tesseract){
+    status.innerHTML='<span class="err">OCRライブラリを読み込めませんでした。写真自体は選択できているので、下の手動登録を使えます。</span>';
+    selectedFiles.forEach((f,i)=>renderOCRCandidate({name:f.name.replace(/\.[^.]+$/,""),cost:0,power:0,text:""},i));
+    return;
+  }
+  status.textContent="OCRを開始しています…";
+  for(let i=0;i<selectedFiles.length;i++){
+    const file=selectedFiles[i];
+    try{
+      status.textContent=`OCR中… ${i+1}/${selectedFiles.length}`;
+      const result=await Tesseract.recognize(file,"jpn+eng",{
+        logger:m=>{
+          if(m.status==="recognizing text"){
+            status.textContent=`OCR中… ${i+1}/${selectedFiles.length}  ${Math.round((m.progress||0)*100)}%`;
+          }
+        }
+      });
+      const text=(result.data?.text||"").trim();
+      const g=guessCard(text);
+      renderOCRCandidate({...g,text},i);
+    }catch(err){
+      renderOCRCandidate({
+        name:file.name.replace(/\.[^.]+$/,""),
+        cost:0,power:0,
+        text:"OCRに失敗しました。カード名・コスト・パワー・テキストを手入力してください。"
+      },i);
+    }
+  }
+  status.innerHTML='<span class="ok">OCR処理が完了しました。結果を確認して登録してください。</span>';
+});
+
+function logMsg(s){
+  const box=document.getElementById("log");
+  box.innerHTML="<div>"+esc(s)+"</div>"+box.innerHTML;
+}
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+function mkPlayer(d){
+  return {deck:shuffle(d.map(c=>({...c}))),hand:[],mana:[],shield:[],battle:[],grave:[]};
+}
+function startGame(){
+  const a=loadJSON("dm_p0",[]),b=loadJSON("dm_p1",[]);
+  if(a.length!==40||b.length!==40){
+    alert("P1/P2の両方に40枚デッキを保存してください。");
+    return;
+  }
+  game={turn:1,cur:0,p:[mkPlayer(a),mkPlayer(b)]};
+  for(let i=0;i<2;i++){
+    for(let j=0;j<5;j++)game.p[i].shield.push(game.p[i].deck.pop());
+    for(let j=0;j<5;j++)game.p[i].hand.push(game.p[i].deck.pop());
+  }
+  showTab("game");logMsg("対戦を開始しました。");renderGame();
+}
+document.getElementById("newGame").addEventListener("click",startGame);
+
+function renderGame(){
+  if(!game)return;
+  document.getElementById("turn").textContent=`P${game.cur+1}のターン　第${game.turn}ターン`;
+  game.p.forEach((p,i)=>{
+    document.getElementById("p"+i).innerHTML=`
+      <h2>P${i+1}</h2>
+      <div class="stats">
+        <div class="stat">山札<br>${p.deck.length}</div>
+        <div class="stat">手札<br>${p.hand.length}</div>
+        <div class="stat">マナ<br>${p.mana.length}</div>
+        <div class="stat">シールド<br>${p.shield.length}</div>
+        <div class="stat">墓地<br>${p.grave.length}</div>
+      </div>
+      <div class="zone"><b>手札</b><div class="cards">${p.hand.map((c,j)=>`<button class="card playCard" data-p="${i}" data-j="${j}">${esc(c.name)}<br><span class="small">コスト ${c.cost}</span></button>`).join("")}</div></div>
+      <div class="zone"><b>バトルゾーン</b><div class="cards">${p.battle.map((c,j)=>`<button class="card attackCard" data-p="${i}" data-j="${j}">${esc(c.name)}<br><span class="small">${c.power||0} / ${c.tapped?"タップ":"アンタップ"}</span></button>`).join("")}</div></div>
+      <div class="zone"><b>マナ</b><div class="cards">${p.mana.map(c=>`<span class="card">${esc(c.name)}</span>`).join("")}</div></div>
+      <div class="zone"><b>墓地</b><div class="small">${p.grave.map(c=>esc(c.name)).join("、")||"なし"}</div></div>`;
+  });
+}
+document.getElementById("gameArea").addEventListener("click",e=>{
+  const playBtn=e.target.closest(".playCard");
+  if(playBtn){play(Number(playBtn.dataset.p),Number(playBtn.dataset.j));return}
+  const atkBtn=e.target.closest(".attackCard");
+  if(atkBtn)attack(Number(atkBtn.dataset.p),Number(atkBtn.dataset.j));
+});
+function drawCard(){
+  if(!game)return;
+  const p=game.p[game.cur];
+  if(!p.deck.length){lose(game.cur,"山札切れ");return}
+  p.hand.push(p.deck.pop());logMsg(`P${game.cur+1}がドローしました。`);renderGame();
+}
+function chargeMana(){
+  if(!game)return;
+  const p=game.p[game.cur];
+  if(!p.hand.length){alert("手札がありません。");return}
+  p.mana.push(p.hand.pop());logMsg(`P${game.cur+1}がマナチャージしました。`);renderGame();
+}
+function play(i,j){
+  if(!game||i!==game.cur)return;
+  const p=game.p[i],c=p.hand[j];
+  if(!c)return;
+  if(p.mana.length<c.cost){logMsg("マナが足りません。");return}
+  p.mana.splice(0,c.cost);
+  p.hand.splice(j,1);
+  if(c.type==="クリーチャー"){
+    p.battle.push({...c,tapped:false});
+    logMsg(`P${i+1}が《${c.name}》を召喚しました。`);
+  }else{
+    const o=game.p[1-i];
+    if(o.battle.length){
+      const x=o.battle.shift();o.grave.push(x);
+      logMsg(`《${x.name}》を墓地へ送りました。`);
+    }
+    p.grave.push(c);
+  }
+  renderGame();
+}
+function attack(i,j){
+  if(!game||i!==game.cur)return;
+  const p=game.p[i],o=game.p[1-i],c=p.battle[j];
+  if(!c||c.tapped)return;
+  c.tapped=true;
+  if(o.shield.length){
+    o.shield.pop();
+    logMsg(`《${c.name}》がシールドを1枚ブレイクしました。`);
+  }else{
+    lose(1-i,"ダイレクトアタック");
+  }
+  renderGame();
+}
+function endTurn(){
+  if(!game)return;
+  game.p[game.cur].battle.forEach(c=>c.tapped=false);
+  game.cur=1-game.cur;
+  if(game.cur===0)game.turn++;
+  drawCard();
+  renderGame();
+}
+function lose(i,reason){
+  logMsg(`P${i+1}の敗北：${reason}`);
+  alert(`P${i+1}の敗北！ ${reason}`);
+}
+document.getElementById("draw").addEventListener("click",drawCard);
+document.getElementById("charge").addEventListener("click",chargeMana);
+document.getElementById("endTurn").addEventListener("click",endTurn);
+document.getElementById("giveup").addEventListener("click",()=>{if(game)lose(game.cur,"投了")});
+
+document.getElementById("loadP1").addEventListener("click",()=>{
+  const x=loadJSON("dm_p0",[]);
+  if(x.length!==40){alert("P1保存デッキがありません。");return}
+  deck=x.map(c=>({...c}));renderDeck();showTab("deck");
+});
+document.getElementById("loadP2").addEventListener("click",()=>{
+  const x=loadJSON("dm_p1",[]);
+  if(x.length!==40){alert("P2保存デッキがありません。");return}
+  deck=x.map(c=>({...c}));renderDeck();showTab("deck");
+});
+
+renderLibrary();
+renderDeck();
+</script>
+</body>
+</html>
